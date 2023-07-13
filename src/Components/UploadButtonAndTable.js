@@ -3,11 +3,14 @@ import { Button, Modal, Form, Input, Table, Upload } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { db } from '../Config/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import * as XLSX from "xlsx";
+import Papa from "papaparse";
 
 const UploadButtonAndTable = () => {
   const [fileList, setFileList] = useState([]);
   const [tableData, setTableData] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [data, setData] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -24,12 +27,43 @@ const UploadButtonAndTable = () => {
     fetchData();
   }, []);
 
-  const handleFileUpload = (event) => {
-    const { fileList } = event;
-    setFileList(fileList);
+  const handleFileUpload = (info) => {
+    const { fileList } = info;
+  
+    if (fileList.length === 0) {
+      // No files selected, handle accordingly
+      return;
+    }
+  
+    const file = fileList[fileList.length - 1].originFileObj;
+    const fileExtension = file.name.split(".").pop().toLowerCase();
+  
+    if (fileExtension === "csv") {
+      Papa.parse(file, {
+        header: true,
+        complete: (results) => {
+          setData(results.data);
+        },
+      });
+    } else if (fileExtension === "xlsx") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = e.target.result;
+        const workbook = XLSX.read(data, { type: "binary" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const parsedData = XLSX.utils.sheet_to_json(sheet);
+        setData(parsedData);
+      };
+      reader.readAsBinaryString(file);
+    } else {
+      // Handle unsupported file type
+      console.log("Unsupported file type");
+    }
+  
+    setFileList([...fileList]); // Update the fileList state
     setIsModalVisible(true);
   };
-
   const handleCancel = () => {
     setFileList([]);
     setIsModalVisible(false);
@@ -49,14 +83,24 @@ const UploadButtonAndTable = () => {
           key,
         }))
       : [];
-
+console.log(data);
   return (
     <div>
-      <Upload fileList={fileList} onChange={handleFileUpload} multiple>
+      {/* <Upload fileList={fileList} onChange={handleFileUpload} multiple>
         <Button icon={<UploadOutlined />} type="primary">
           Select Files
         </Button>
-      </Upload>
+      </Upload> */}
+      <Upload
+  accept=".xlsx, .xls, .csv"
+  onChange={handleFileUpload}
+  multiple
+  fileList={fileList}
+>
+  <Button icon={<UploadOutlined />} type="primary">
+    Select Files
+  </Button>
+</Upload>
 
       <Table dataSource={tableData} columns={columns} />
 
